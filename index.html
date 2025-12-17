@@ -1,0 +1,539 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Nexus-G: Final Layout</title>
+    <style>
+      body {
+        margin: 0;
+        background-color: #000;
+        color: #0f0;
+        font-family: 'Consolas', 'Monaco', monospace;
+        overflow: hidden;
+        font-size: 10px;
+      }
+      .container {
+        position: relative;
+        width: 100vw;
+        height: 100vh;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+      }
+
+      #input_video {
+        display: none;
+      }
+      #output_canvas {
+        position: absolute;
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
+        transform: scaleX(-1);
+      }
+
+      /* --- DASHBOARD PANELS --- */
+      .panel {
+        position: absolute;
+        background: rgba(0, 8, 12, 0.92);
+        border: 1px solid rgba(0, 255, 68, 0.3);
+        box-shadow: 0 0 20px rgba(0, 0, 0, 0.9);
+        padding: 10px;
+        width: 220px;
+        pointer-events: none;
+        backdrop-filter: blur(4px);
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+      }
+
+      .panel h3 {
+        margin: 0 0 6px 0;
+        padding-bottom: 4px;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+        font-size: 11px;
+        color: #fff;
+        letter-spacing: 1px;
+        text-transform: uppercase;
+      }
+
+      /* Data Rows */
+      .row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 2px;
+      }
+      .lbl {
+        color: #aaa;
+        font-size: 9px;
+      }
+      .val {
+        color: #fff;
+        font-weight: bold;
+      }
+      .sub-group {
+        border-top: 1px dashed #333;
+        margin-top: 6px;
+        padding-top: 6px;
+      }
+
+      /* Visual Bars */
+      .bar-bg {
+        width: 100%;
+        height: 3px;
+        background: #111;
+        margin-top: 2px;
+        border: 1px solid #333;
+      }
+      .bar-fill {
+        height: 100%;
+        width: 0%;
+        transition: width 0.1s;
+      }
+
+      /* Color Palette */
+      .c-grn {
+        color: #00ff44;
+      }
+      .fill-grn {
+        background: #00ff44;
+      } /* Hand */
+      .c-cyn {
+        color: #00ddee;
+      }
+      .fill-cyn {
+        background: #00ddee;
+      } /* Spatial */
+      .c-org {
+        color: #ffaa00;
+      }
+      .fill-org {
+        background: #ffaa00;
+      } /* Face */
+      .c-mag {
+        color: #ff00ff;
+      }
+      .fill-mag {
+        background: #ff00ff;
+      } /* Triangulation */
+
+      /* --- POSITIONING --- */
+
+      /* Top Corners: Hands */
+      #pnl-left {
+        top: 20px;
+        left: 20px;
+        border-left: 3px solid #00ff44;
+      }
+      #pnl-right {
+        top: 20px;
+        right: 20px;
+        border-right: 3px solid #00ff44;
+      }
+
+      /* Bottom Left: Spatial + Triangulation */
+      #pnl-spatial {
+        bottom: 20px;
+        left: 20px;
+        border-left: 3px solid #00ddee;
+        border-bottom: 1px solid #00ddee;
+      }
+
+      /* Bottom Right: Expression + Head Pose */
+      #pnl-expression {
+        bottom: 20px;
+        right: 20px;
+        border-right: 3px solid #ffaa00;
+        border-bottom: 1px solid #ffaa00;
+        text-align: right; /* Right align specific logic */
+      }
+      /* Override flex alignment for right panel to look neat */
+      #pnl-expression .row {
+        flex-direction: row-reverse;
+      }
+
+      #loading {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        color: #00ff44;
+        font-size: 16px;
+      }
+    </style>
+
+    <script
+      src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"
+      crossorigin="anonymous"
+    ></script>
+    <script
+      src="https://cdn.jsdelivr.net/npm/@mediapipe/control_utils/control_utils.js"
+      crossorigin="anonymous"
+    ></script>
+    <script
+      src="https://cdn.jsdelivr.net/npm/@mediapipe/holistic/holistic.js"
+      crossorigin="anonymous"
+    ></script>
+  </head>
+  <body>
+    <div class="container">
+      <div id="loading">BOOTING NEXUS-G...</div>
+      <video id="input_video"></video>
+      <canvas id="output_canvas"></canvas>
+
+      <div id="pnl-left" class="panel">
+        <h3 class="c-grn">LEFT HAND</h3>
+        <div id="lh-content">Searching...</div>
+      </div>
+
+      <div id="pnl-right" class="panel">
+        <h3 class="c-grn">RIGHT HAND</h3>
+        <div id="rh-content">Searching...</div>
+      </div>
+
+      <div id="pnl-spatial" class="panel">
+        <h3 class="c-cyn">SPATIAL & TRIANGULATION</h3>
+
+        <div class="row">
+          <span class="lbl">FACE POS X</span
+          ><span id="face-x" class="val">0.00</span>
+        </div>
+        <div class="row">
+          <span class="lbl">FACE POS Y</span
+          ><span id="face-y" class="val">0.00</span>
+        </div>
+        <div class="row">
+          <span class="lbl">FACE DEPTH (Z)</span
+          ><span id="face-dist" class="val">--</span>
+        </div>
+
+        <div class="sub-group">
+          <div class="row">
+            <span class="lbl c-mag">L.HAND ↔ R.HAND</span
+            ><span id="dist-lr" class="val">--</span>
+          </div>
+          <div class="bar-bg">
+            <div id="bar-lr" class="bar-fill fill-mag"></div>
+          </div>
+
+          <div class="row">
+            <span class="lbl c-mag">FACE ↔ L.HAND</span
+            ><span id="dist-fl" class="val">--</span>
+          </div>
+          <div class="bar-bg">
+            <div id="bar-fl" class="bar-fill fill-mag"></div>
+          </div>
+
+          <div class="row">
+            <span class="lbl c-mag">FACE ↔ R.HAND</span
+            ><span id="dist-fr" class="val">--</span>
+          </div>
+          <div class="bar-bg">
+            <div id="bar-fr" class="bar-fill fill-mag"></div>
+          </div>
+        </div>
+      </div>
+
+      <div id="pnl-expression" class="panel">
+        <h3 class="c-org">EXPRESSION & POSE</h3>
+
+        <div class="row">
+          <span class="lbl">PITCH (NOD)</span
+          ><span id="face-pitch" class="val">0</span>
+        </div>
+        <div class="row">
+          <span class="lbl">YAW (TURN)</span
+          ><span id="face-yaw" class="val">0</span>
+        </div>
+        <div class="row">
+          <span class="lbl">ROLL (TILT)</span
+          ><span id="face-roll" class="val">0°</span>
+        </div>
+
+        <div class="sub-group">
+          <div class="row">
+            <span class="lbl">L. EYE</span
+            ><span id="eye-l" class="val">OPEN</span>
+          </div>
+          <div class="row">
+            <span class="lbl">R. EYE</span
+            ><span id="eye-r" class="val">OPEN</span>
+          </div>
+
+          <div style="margin-top: 5px"></div>
+
+          <div class="row">
+            <span class="lbl">MOUTH APERTURE</span
+            ><span id="mouth-val" class="val">0%</span>
+          </div>
+          <div class="bar-bg" style="transform: scaleX(-1)">
+            <div id="bar-mouth" class="bar-fill fill-org"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      const videoElement = document.getElementById('input_video');
+      const canvasElement = document.getElementById('output_canvas');
+      const canvasCtx = canvasElement.getContext('2d');
+
+      // Global Coords for Triangulation
+      let posL = null;
+      let posR = null;
+      let posF = null;
+
+      // --- HTML GENERATORS ---
+      function generateHandHTML(data) {
+        if (!data.active)
+          return `<div style="color:#555; padding:5px 0;">NO SIGNAL</div>`;
+        return `
+            <div class="row"><span class="lbl">POS X/Y</span><span class="val">${
+              data.x
+            } / ${data.y}</span></div>
+            <div class="row"><span class="lbl">DEPTH</span><span class="val">${
+              data.dist
+            } cm</span></div>
+            
+            <div class="sub-group">
+                <div class="row"><span class="lbl">TILT / PINCH</span><span class="val">${
+                  data.tilt
+                }° / ${data.pinch}%</span></div>
+                <div class="bar-bg"><div class="bar-fill fill-grn" style="width:${
+                  data.pinch
+                }%"></div></div>
+            </div>
+
+            <div class="sub-group">
+                <div class="row" style="font-size:9px; letter-spacing:1px;">
+                   <span style="color:${data.f0 ? '#444' : '#fff'}">TH</span>
+                   <span style="color:${data.f1 ? '#444' : '#fff'}">IN</span>
+                   <span style="color:${data.f2 ? '#444' : '#fff'}">MI</span>
+                   <span style="color:${data.f3 ? '#444' : '#fff'}">RI</span>
+                   <span style="color:${data.f4 ? '#444' : '#fff'}">PI</span>
+                </div>
+            </div>
+        `;
+      }
+
+      // --- MATH UTILS ---
+      function dist(p1, p2) {
+        return Math.sqrt(Math.pow(p1.x - p2.x, 2) + Math.pow(p1.y - p2.y, 2));
+      }
+
+      function estimateDepth(pixelDist, realCm, focalConst = 0.65) {
+        if (pixelDist === 0) return 0;
+        return Math.round((focalConst * realCm) / pixelDist);
+      }
+
+      // --- LOGIC ENGINE ---
+      function processHand(landmarks) {
+        if (!landmarks) return { active: false };
+
+        let cx = landmarks[5].x;
+        let cy = landmarks[5].y;
+        let dPx = dist(landmarks[0], landmarks[17]);
+        let distCm = estimateDepth(dPx, 8.0);
+        let pinchPx = dist(landmarks[4], landmarks[8]);
+        let pinchPct = Math.round(
+          Math.max(0, Math.min(100, ((0.15 - pinchPx) / 0.13) * 100))
+        );
+        let dx = landmarks[9].x - landmarks[0].x;
+        let dy = landmarks[9].y - landmarks[0].y;
+        let tiltDeg = Math.round((Math.atan2(dy, dx) * 180) / Math.PI + 90);
+
+        let f0 = dist(landmarks[4], landmarks[17]) < 0.12;
+        let f1 =
+          dist(landmarks[0], landmarks[8]) < dist(landmarks[0], landmarks[6]);
+        let f2 =
+          dist(landmarks[0], landmarks[12]) < dist(landmarks[0], landmarks[10]);
+        let f3 =
+          dist(landmarks[0], landmarks[16]) < dist(landmarks[0], landmarks[14]);
+        let f4 =
+          dist(landmarks[0], landmarks[20]) < dist(landmarks[0], landmarks[18]);
+
+        return {
+          active: true,
+          x: cx.toFixed(2),
+          y: cy.toFixed(2),
+          dist: distCm,
+          pinch: pinchPct,
+          tilt: tiltDeg,
+          f0,
+          f1,
+          f2,
+          f3,
+          f4,
+          raw: { x: cx, y: cy },
+        };
+      }
+
+      function processFace(landmarks) {
+        if (!landmarks) return null;
+
+        // 1. Position & Depth (Bottom Left)
+        let nose = landmarks[1];
+        document.getElementById('face-x').innerText = nose.x.toFixed(2);
+        document.getElementById('face-y').innerText = nose.y.toFixed(2);
+        let earPx = dist(landmarks[234], landmarks[454]);
+        let distCm = estimateDepth(earPx, 15);
+        document.getElementById('face-dist').innerText = distCm + ' cm';
+
+        // 2. Pose & Expression (Bottom Right)
+        let leftEar = landmarks[234];
+        let rightEar = landmarks[454];
+        let midFace = (leftEar.x + rightEar.x) / 2;
+        let yaw = Math.round((nose.x - midFace) * 1000);
+        document.getElementById('face-yaw').innerText = yaw;
+
+        let forehead = landmarks[10];
+        let chin = landmarks[152];
+        let faceH = dist(forehead, chin);
+        let pitch = Math.round(((nose.y - forehead.y) / faceH - 0.5) * 100);
+        document.getElementById('face-pitch').innerText = pitch;
+
+        let dX = rightEar.x - leftEar.x;
+        let dY = rightEar.y - leftEar.y;
+        let roll = Math.round((Math.atan2(dY, dX) * 180) / Math.PI);
+        document.getElementById('face-roll').innerText = roll + '°';
+
+        // Eyes
+        let lEyeOpen =
+          (dist(landmarks[159], landmarks[145]) / faceH) * 100 > 2.0;
+        let rEyeOpen =
+          (dist(landmarks[386], landmarks[374]) / faceH) * 100 > 2.0;
+
+        let elL = document.getElementById('eye-l');
+        elL.innerText = lEyeOpen ? 'OPEN' : 'BLINK';
+        elL.style.color = lEyeOpen ? '#fff' : '#ff3333';
+        let elR = document.getElementById('eye-r');
+        elR.innerText = rEyeOpen ? 'OPEN' : 'BLINK';
+        elR.style.color = rEyeOpen ? '#fff' : '#ff3333';
+
+        // Mouth
+        let mouthH = dist(landmarks[13], landmarks[14]);
+        let mouthPct = Math.round(
+          Math.min(100, Math.max(0, ((mouthH / faceH) * 100 - 2) * 8))
+        );
+        document.getElementById('mouth-val').innerText = mouthPct + '%';
+        document.getElementById('bar-mouth').style.width = mouthPct + '%';
+
+        return { x: nose.x, y: nose.y };
+      }
+
+      function updateTriangulation() {
+        // Reset
+        document.getElementById('dist-lr').innerText = '--';
+        document.getElementById('bar-lr').style.width = '0%';
+        document.getElementById('dist-fl').innerText = '--';
+        document.getElementById('bar-fl').style.width = '0%';
+        document.getElementById('dist-fr').innerText = '--';
+        document.getElementById('bar-fr').style.width = '0%';
+
+        const width = canvasElement.width;
+        const height = canvasElement.height;
+        canvasCtx.lineWidth = 1;
+
+        const link = (p1, p2, idText, idBar) => {
+          let d = dist(p1, p2);
+          let scrDist = Math.round(d * 100);
+
+          let opacity = Math.max(0.1, 1 - d);
+          canvasCtx.strokeStyle = `rgba(255, 0, 255, ${opacity})`;
+          canvasCtx.beginPath();
+          canvasCtx.moveTo(p1.x * width, p1.y * height);
+          canvasCtx.lineTo(p2.x * width, p2.y * height);
+          canvasCtx.stroke();
+
+          document.getElementById(idText).innerText = scrDist;
+          document.getElementById(idBar).style.width =
+            Math.min(100, scrDist) + '%';
+        };
+
+        if (posL && posR) link(posL, posR, 'dist-lr', 'bar-lr');
+        if (posF && posL) link(posF, posL, 'dist-fl', 'bar-fl');
+        if (posF && posR) link(posF, posR, 'dist-fr', 'bar-fr');
+      }
+
+      // --- MAIN LOOP ---
+      function onResults(results) {
+        document.getElementById('loading').style.display = 'none';
+
+        canvasCtx.save();
+        canvasCtx.drawImage(
+          results.image,
+          0,
+          0,
+          canvasElement.width,
+          canvasElement.height
+        );
+
+        posL = null;
+        posR = null;
+        posF = null;
+
+        posF = processFace(results.faceLandmarks);
+
+        let ld = processHand(results.leftHandLandmarks);
+        document.getElementById('lh-content').innerHTML = generateHandHTML(ld);
+        if (ld.active) posL = ld.raw;
+
+        let rd = processHand(results.rightHandLandmarks);
+        document.getElementById('rh-content').innerHTML = generateHandHTML(rd);
+        if (rd.active) posR = rd.raw;
+
+        updateTriangulation();
+
+        // Draw Centers
+        canvasCtx.fillStyle = '#00ff44';
+        if (posL)
+          canvasCtx.fillRect(
+            posL.x * canvasElement.width - 2,
+            posL.y * canvasElement.height - 2,
+            4,
+            4
+          );
+        if (posR)
+          canvasCtx.fillRect(
+            posR.x * canvasElement.width - 2,
+            posR.y * canvasElement.height - 2,
+            4,
+            4
+          );
+        if (posF) {
+          canvasCtx.fillStyle = '#ffaa00';
+          canvasCtx.fillRect(
+            posF.x * canvasElement.width - 2,
+            posF.y * canvasElement.height - 2,
+            4,
+            4
+          );
+        }
+
+        canvasCtx.restore();
+      }
+
+      const holistic = new Holistic({
+        locateFile: (file) =>
+          `https://cdn.jsdelivr.net/npm/@mediapipe/holistic/${file}`,
+      });
+      holistic.setOptions({
+        modelComplexity: 1,
+        smoothLandmarks: true,
+        refineFaceLandmarks: true,
+      });
+      holistic.onResults(onResults);
+
+      const camera = new Camera(videoElement, {
+        onFrame: async () => await holistic.send({ image: videoElement }),
+        width: 1280,
+        height: 720,
+      });
+
+      canvasElement.width = 1280;
+      canvasElement.height = 720;
+      camera.start();
+    </script>
+  </body>
+</html>
